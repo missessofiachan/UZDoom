@@ -25,6 +25,7 @@
 
 #include "c_cvars.h"
 #include "i_net.h"
+#include "common/thirdparty/discord_presence.h"
 #include "i_soundinternal.h"
 
 #ifdef _WIN32
@@ -497,12 +498,9 @@ CVAR(Bool, autoloadwidescreen, true, CVAR_ARCHIVE | CVAR_NOINITCALL | CVAR_GLOBA
 CVAR(Bool, r_debug_disable_vis_filter, false, 0)
 CVAR(Int, vid_showpalette, 0, 0)
 
-/*
 CUSTOM_CVAR (Bool, i_discordrpc, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 {
-	I_UpdateWindowTitle();
 }
-*/
 
 CUSTOM_CVAR(Int, I_FriendlyWindowTitle, 1, CVAR_GLOBALCONFIG|CVAR_ARCHIVE|CVAR_NOINITCALL)
 {
@@ -1460,6 +1458,7 @@ void D_DoomLoop ()
 			D_ProcessEvents();
 			D_Display ();
 			S_UpdateMusic();
+			I_TickDiscordPresence();
 
 			if (gameloop_abort)
 			{
@@ -2151,7 +2150,7 @@ static FString ParseGameInfo(std::vector<FileSys::ResourceName> &pwads, const ch
 		else if (!nextKey.CompareNoCase("DISCORDAPPID"))
 		{ // TODO readd discordrpc with better library
 			sc.MustGetString();
-			//GameStartupInfo.DiscordAppId = sc.String;
+			GameStartupInfo.DiscordAppId = sc.String;
 		}
 		else if (!nextKey.CompareNoCase("STEAMAPPID"))
 		{
@@ -4122,7 +4121,6 @@ static int D_DoomMain_Internal (void)
 		}
 		lastIWAD = iwad;
 
-		/*
 		if (GameStartupInfo.DiscordAppId.GetChars())
 		{
 			const char* check = GameStartupInfo.DiscordAppId.GetChars();
@@ -4140,7 +4138,6 @@ static int D_DoomMain_Internal (void)
 			if (failedcheck)
 				GameStartupInfo.DiscordAppId = "";
 		}
-		*/
 
 		if (GameStartupInfo.SteamAppId.GetChars())
 		{
@@ -4335,8 +4332,9 @@ void D_Cleanup()
 	GameStartupInfo.Name = "";
 	GameStartupInfo.BkColor = GameStartupInfo.FgColor = GameStartupInfo.Type = 0;
 	GameStartupInfo.LoadWidescreen = GameStartupInfo.LoadLights = GameStartupInfo.LoadBrightmaps = -1;
-	//GameStartupInfo.DiscordAppId = "";
+	GameStartupInfo.DiscordAppId = "";
 	GameStartupInfo.SteamAppId = "";
+	I_ShutdownDiscordPresence();
 
 	GC::FullGC();					// clean up before taking down the object list.
 

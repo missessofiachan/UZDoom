@@ -89,10 +89,10 @@
 #define VR3D_ENABLED
 
 // More stuff that needs to be different for derivatives.
-#define GAMENAME "UZDoom"
-#define WGAMENAME L"UZDoom"
-#define GAMENAMELOWERCASE "uzdoom"
-#define APPID "org.zdoom.UZDoom"
+#define GAMENAME "UZDoom Sofia Edition"
+#define WGAMENAME L"UZDoom Sofia Edition"
+#define GAMENAMELOWERCASE "uzdoom-sofia-edition"
+#define APPID "org.zdoom.UZDoomSofiaEdition"
 #define QUERYIWADDEFAULT true
 #define BUGS_URL "https://github.com/UZDoom/UZDoom/issues"
 // For QUERYIWADDEFAULT: Set to 'true' to always show dialog box on startup by default, 'false' to disable.

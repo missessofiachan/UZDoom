@@ -1089,6 +1089,7 @@ set (PCH_SOURCES
 	common/utility/writezip.cpp
 	common/utility/vga2ansi.cpp
 	common/thirdparty/base64.cpp
+	common/thirdparty/discord_presence.cpp
 	common/thirdparty/md5.cpp
 	common/thirdparty/superfasthash.cpp
 	common/thirdparty/libsmackerdec/src/BitReader.cpp
