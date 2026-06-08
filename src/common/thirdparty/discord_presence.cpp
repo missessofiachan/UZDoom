@@ -22,6 +22,8 @@
 #include "c_dispatch.h"
 #include "version.h"
 #include "common/filesystem/include/fs_filesystem.h"
+#include "gi.h"
+#include "startupinfo.h"
 
 // External declarations we need
 extern int consoleplayer;
@@ -44,6 +46,8 @@ private:
     std::string mAppId;
     std::string mState;
     std::string mDetails;
+    std::string mLargeImage = "game-image";
+    std::string mLargeText = "UZDoom";
     int64_t mStartTime = 0;
     bool mNeedUpdate = false;
 
@@ -183,13 +187,15 @@ private:
             }
 
             if (mConnected) {
-                std::string details, state;
+                std::string details, state, largeImage, largeText;
                 bool doUpdate = false;
                 {
                     std::lock_guard<std::mutex> lock(mMutex);
                     if (mNeedUpdate) {
                         details = mDetails;
                         state = mState;
+                        largeImage = mLargeImage;
+                        largeText = mLargeText;
                         mNeedUpdate = false;
                         doUpdate = true;
                     }
@@ -207,8 +213,8 @@ private:
                         "        \"start\": " + std::to_string(mStartTime) + "\n"
                         "      },\n"
                         "      \"assets\": {\n"
-                        "        \"large_image\": \"game-image\",\n"
-                        "        \"large_text\": \"UZDoom\"\n"
+                        "        \"large_image\": \"" + EscapeJSON(largeImage) + "\",\n"
+                        "        \"large_text\": \"" + EscapeJSON(largeText) + "\"\n"
                         "      }\n"
                         "    }\n"
                         "  },\n"
@@ -244,11 +250,13 @@ public:
         }
     }
 
-    void Update(const std::string& details, const std::string& state) {
+    void Update(const std::string& details, const std::string& state, const std::string& largeImage, const std::string& largeText) {
         std::lock_guard<std::mutex> lock(mMutex);
-        if (mDetails != details || mState != state) {
+        if (mDetails != details || mState != state || mLargeImage != largeImage || mLargeText != largeText) {
             mDetails = details;
             mState = state;
+            mLargeImage = largeImage;
+            mLargeText = largeText;
             mNeedUpdate = true;
         }
     }
@@ -281,6 +289,79 @@ void I_TickDiscordPresence() {
 
     std::string details = "🎮 Main Menu";
     std::string state = "";
+    std::string largeImage = "game-image";
+    std::string largeText = "UZDoom";
+
+    // Set large image and text based on active game/IWAD configuration or startup info name
+    std::string gameName = "";
+    if (GameStartupInfo.Name.IsNotEmpty()) {
+        gameName = GameStartupInfo.Name.GetChars();
+    } else if (gameinfo.ConfigName.IsNotEmpty()) {
+        gameName = gameinfo.ConfigName.GetChars();
+    }
+
+    if (!gameName.empty()) {
+        largeText = "UZDoom (" + gameName + ")";
+    }
+
+    // Determine base game asset key using the IWAD filename to prevent mods from breaking it
+    std::string iwadFile = "";
+    int iwadContainer = fileSystem.GetIwadNum();
+    if (iwadContainer >= 0) {
+        const char* resName = fileSystem.GetResourceFileName(iwadContainer);
+        if (resName) {
+            std::string fullPath(resName);
+            size_t slash = fullPath.find_last_of("/\\");
+            if (slash != std::string::npos) {
+                iwadFile = fullPath.substr(slash + 1);
+            } else {
+                iwadFile = fullPath;
+            }
+            for (char &c : iwadFile) c = tolower(c);
+        }
+    }
+
+    if (!iwadFile.empty()) {
+        if (iwadFile.find("plutonia") != std::string::npos) {
+            largeImage = "plutonia";
+        } else if (iwadFile.find("tnt") != std::string::npos) {
+            largeImage = "tnt";
+        } else if (iwadFile.find("doom2") != std::string::npos) {
+            largeImage = "doom2";
+        } else if (iwadFile.find("doom") != std::string::npos) {
+            largeImage = "doom";
+        } else if (iwadFile.find("heretic") != std::string::npos) {
+            largeImage = "heretic";
+        } else if (iwadFile.find("hexen") != std::string::npos) {
+            largeImage = "hexen";
+        } else if (iwadFile.find("strife") != std::string::npos) {
+            largeImage = "strife";
+        } else if (iwadFile.find("chex") != std::string::npos) {
+            largeImage = "chex";
+        }
+    } else if (!gameName.empty()) {
+        // Fall back to config/startup name if IWAD name is somehow empty
+        std::string lowerGame = gameName;
+        for (char &c : lowerGame) c = tolower(c);
+        
+        if (lowerGame.find("plutonia") != std::string::npos) {
+            largeImage = "plutonia";
+        } else if (lowerGame.find("tnt") != std::string::npos) {
+            largeImage = "tnt";
+        } else if (lowerGame.find("doom 2") != std::string::npos || lowerGame.find("doom ii") != std::string::npos) {
+            largeImage = "doom2";
+        } else if (lowerGame.find("doom") != std::string::npos) {
+            largeImage = "doom";
+        } else if (lowerGame.find("heretic") != std::string::npos) {
+            largeImage = "heretic";
+        } else if (lowerGame.find("hexen") != std::string::npos) {
+            largeImage = "hexen";
+        } else if (lowerGame.find("strife") != std::string::npos) {
+            largeImage = "strife";
+        } else if (lowerGame.find("chex") != std::string::npos) {
+            largeImage = "chex";
+        }
+    }
 
     if (gamestate == GS_LEVEL && primaryLevel) {
         std::string mapName = primaryLevel->MapName.GetChars();
@@ -319,7 +400,7 @@ void I_TickDiscordPresence() {
 
         state = "❤️ Health: " + std::to_string(health) + "%  •  💀 Kills: " + std::to_string(kills) + "/" + std::to_string(totalKills) +
                 "  •  🔍 Secrets: " + std::to_string(secrets) + "/" + std::to_string(totalSecrets) +
-                "  •  " + weaponName;
+                "  •  " + getWeaponEmoji(weaponName) + " " + weaponName;
         if (!wadName.empty()) {
             state += "  •  💾 " + wadName;
         }
@@ -343,7 +424,7 @@ void I_TickDiscordPresence() {
         }
     }
 
-    gDiscordClient.Update(details, state);
+    gDiscordClient.Update(details, state, largeImage, largeText);
 }
 
 void I_ShutdownDiscordPresence() {
