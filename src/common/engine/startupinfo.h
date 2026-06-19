@@ -34,6 +34,8 @@ struct FStartupInfo
 	FString con;
 	FString def;
 	FString DiscordAppId = nullptr;
+	FString DiscordLargeImage = nullptr;
+	FString DiscordLargeText = nullptr;
 	FString SteamAppId = nullptr;
 	int Type;
 	int LoadLights = -1;

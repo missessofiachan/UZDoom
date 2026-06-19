@@ -501,6 +501,9 @@ CVAR(Int, vid_showpalette, 0, 0)
 CUSTOM_CVAR (Bool, i_discordrpc, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 {
 }
+CVAR(String, discord_appid, "", CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(String, discord_largeimage, "", CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(String, discord_largetext, "", CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 CUSTOM_CVAR(Int, I_FriendlyWindowTitle, 1, CVAR_GLOBALCONFIG|CVAR_ARCHIVE|CVAR_NOINITCALL)
 {
@@ -2152,6 +2155,16 @@ static FString ParseGameInfo(std::vector<FileSys::ResourceName> &pwads, const ch
 		{ // TODO readd discordrpc with better library
 			sc.MustGetString();
 			GameStartupInfo.DiscordAppId = sc.String;
+		}
+		else if (!nextKey.CompareNoCase("DISCORDLARGEIMAGE"))
+		{
+			sc.MustGetString();
+			GameStartupInfo.DiscordLargeImage = sc.String;
+		}
+		else if (!nextKey.CompareNoCase("DISCORDLARGETEXT"))
+		{
+			sc.MustGetString();
+			GameStartupInfo.DiscordLargeText = sc.String;
 		}
 		else if (!nextKey.CompareNoCase("STEAMAPPID"))
 		{
@@ -4334,6 +4347,8 @@ void D_Cleanup()
 	GameStartupInfo.BkColor = GameStartupInfo.FgColor = GameStartupInfo.Type = 0;
 	GameStartupInfo.LoadWidescreen = GameStartupInfo.LoadLights = GameStartupInfo.LoadBrightmaps = -1;
 	GameStartupInfo.DiscordAppId = "";
+	GameStartupInfo.DiscordLargeImage = "";
+	GameStartupInfo.DiscordLargeText = "";
 	GameStartupInfo.SteamAppId = "";
 	I_ShutdownDiscordPresence();
 

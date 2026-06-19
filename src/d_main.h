@@ -109,6 +109,8 @@ struct FIWADInfo
 	int LoadBrightmaps = -1;
 	int LoadLights = -1;
 	FString DiscordAppId = nullptr;
+	FString DiscordLargeImage = nullptr;
+	FString DiscordLargeText = nullptr;
 	FString SteamAppId = nullptr;
 };
 

@@ -29,6 +29,9 @@
 extern int consoleplayer;
 extern player_t players[MAXPLAYERS];
 EXTERN_CVAR(Bool, i_discordrpc)
+EXTERN_CVAR(String, discord_appid)
+EXTERN_CVAR(String, discord_largeimage)
+EXTERN_CVAR(String, discord_largetext)
 const char * G_SkillName();
 
 // For Process ID
@@ -260,6 +263,10 @@ public:
             mNeedUpdate = true;
         }
     }
+
+    std::string GetAppId() const {
+        return mAppId;
+    }
 };
 
 static DiscordRpcClient gDiscordClient;
@@ -285,6 +292,16 @@ void I_TickDiscordPresence() {
     }
 
     const char* appId = DEFAULT_DISCORD_APP_ID;
+    const char* cvarAppId = discord_appid;
+    if (cvarAppId && cvarAppId[0] != '\0') {
+        appId = cvarAppId;
+    } else if (GameStartupInfo.DiscordAppId.IsNotEmpty()) {
+        appId = GameStartupInfo.DiscordAppId.GetChars();
+    }
+
+    if (gDiscordClient.GetAppId() != appId) {
+        gDiscordClient.Stop();
+    }
     gDiscordClient.Start(appId);
 
     std::string details = "🎮 Main Menu";
@@ -300,66 +317,82 @@ void I_TickDiscordPresence() {
         gameName = gameinfo.ConfigName.GetChars();
     }
 
-    if (!gameName.empty()) {
-        largeText = "UZDoom (" + gameName + ")";
-    }
-
-    // Determine base game asset key using the IWAD filename to prevent mods from breaking it
-    std::string iwadFile = "";
-    int iwadContainer = fileSystem.GetIwadNum();
-    if (iwadContainer >= 0) {
-        const char* resName = fileSystem.GetResourceFileName(iwadContainer);
-        if (resName) {
-            std::string fullPath(resName);
-            size_t slash = fullPath.find_last_of("/\\");
-            if (slash != std::string::npos) {
-                iwadFile = fullPath.substr(slash + 1);
-            } else {
-                iwadFile = fullPath;
+    // Resolve Large Image
+    const char* cvarLargeImage = discord_largeimage;
+    if (cvarLargeImage && cvarLargeImage[0] != '\0') {
+        largeImage = cvarLargeImage;
+    } else if (GameStartupInfo.DiscordLargeImage.IsNotEmpty()) {
+        largeImage = GameStartupInfo.DiscordLargeImage.GetChars();
+    } else {
+        // Determine base game asset key using the IWAD filename to prevent mods from breaking it
+        std::string iwadFile = "";
+        int iwadContainer = fileSystem.GetIwadNum();
+        if (iwadContainer >= 0) {
+            const char* resName = fileSystem.GetResourceFileName(iwadContainer);
+            if (resName) {
+                std::string fullPath(resName);
+                size_t slash = fullPath.find_last_of("/\\");
+                if (slash != std::string::npos) {
+                    iwadFile = fullPath.substr(slash + 1);
+                } else {
+                    iwadFile = fullPath;
+                }
+                for (char &c : iwadFile) c = tolower(c);
             }
-            for (char &c : iwadFile) c = tolower(c);
+        }
+
+        if (!iwadFile.empty()) {
+            if (iwadFile.find("plutonia") != std::string::npos) {
+                largeImage = "plutonia";
+            } else if (iwadFile.find("tnt") != std::string::npos) {
+                largeImage = "tnt";
+            } else if (iwadFile.find("doom2") != std::string::npos) {
+                largeImage = "doom2";
+            } else if (iwadFile.find("doom") != std::string::npos) {
+                largeImage = "doom";
+            } else if (iwadFile.find("heretic") != std::string::npos) {
+                largeImage = "heretic";
+            } else if (iwadFile.find("hexen") != std::string::npos) {
+                largeImage = "hexen";
+            } else if (iwadFile.find("strife") != std::string::npos) {
+                largeImage = "strife";
+            } else if (iwadFile.find("chex") != std::string::npos) {
+                largeImage = "chex";
+            }
+        } else if (!gameName.empty()) {
+            // Fall back to config/startup name if IWAD name is somehow empty
+            std::string lowerGame = gameName;
+            for (char &c : lowerGame) c = tolower(c);
+            
+            if (lowerGame.find("plutonia") != std::string::npos) {
+                largeImage = "plutonia";
+            } else if (lowerGame.find("tnt") != std::string::npos) {
+                largeImage = "tnt";
+            } else if (lowerGame.find("doom 2") != std::string::npos || lowerGame.find("doom ii") != std::string::npos) {
+                largeImage = "doom2";
+            } else if (lowerGame.find("doom") != std::string::npos) {
+                largeImage = "doom";
+            } else if (lowerGame.find("heretic") != std::string::npos) {
+                largeImage = "heretic";
+            } else if (lowerGame.find("hexen") != std::string::npos) {
+                largeImage = "hexen";
+            } else if (lowerGame.find("strife") != std::string::npos) {
+                largeImage = "strife";
+            } else if (lowerGame.find("chex") != std::string::npos) {
+                largeImage = "chex";
+            }
         }
     }
 
-    if (!iwadFile.empty()) {
-        if (iwadFile.find("plutonia") != std::string::npos) {
-            largeImage = "plutonia";
-        } else if (iwadFile.find("tnt") != std::string::npos) {
-            largeImage = "tnt";
-        } else if (iwadFile.find("doom2") != std::string::npos) {
-            largeImage = "doom2";
-        } else if (iwadFile.find("doom") != std::string::npos) {
-            largeImage = "doom";
-        } else if (iwadFile.find("heretic") != std::string::npos) {
-            largeImage = "heretic";
-        } else if (iwadFile.find("hexen") != std::string::npos) {
-            largeImage = "hexen";
-        } else if (iwadFile.find("strife") != std::string::npos) {
-            largeImage = "strife";
-        } else if (iwadFile.find("chex") != std::string::npos) {
-            largeImage = "chex";
-        }
-    } else if (!gameName.empty()) {
-        // Fall back to config/startup name if IWAD name is somehow empty
-        std::string lowerGame = gameName;
-        for (char &c : lowerGame) c = tolower(c);
-        
-        if (lowerGame.find("plutonia") != std::string::npos) {
-            largeImage = "plutonia";
-        } else if (lowerGame.find("tnt") != std::string::npos) {
-            largeImage = "tnt";
-        } else if (lowerGame.find("doom 2") != std::string::npos || lowerGame.find("doom ii") != std::string::npos) {
-            largeImage = "doom2";
-        } else if (lowerGame.find("doom") != std::string::npos) {
-            largeImage = "doom";
-        } else if (lowerGame.find("heretic") != std::string::npos) {
-            largeImage = "heretic";
-        } else if (lowerGame.find("hexen") != std::string::npos) {
-            largeImage = "hexen";
-        } else if (lowerGame.find("strife") != std::string::npos) {
-            largeImage = "strife";
-        } else if (lowerGame.find("chex") != std::string::npos) {
-            largeImage = "chex";
+    // Resolve Large Text
+    const char* cvarLargeText = discord_largetext;
+    if (cvarLargeText && cvarLargeText[0] != '\0') {
+        largeText = cvarLargeText;
+    } else if (GameStartupInfo.DiscordLargeText.IsNotEmpty()) {
+        largeText = GameStartupInfo.DiscordLargeText.GetChars();
+    } else {
+        if (!gameName.empty()) {
+            largeText = "UZDoom (" + gameName + ")";
         }
     }
 
