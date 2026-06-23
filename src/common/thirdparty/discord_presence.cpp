@@ -6,6 +6,7 @@
 #include <chrono>
 #include <vector>
 #include <cstring>
+#include <cerrno>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -37,6 +38,37 @@ const char * G_SkillName();
 // For Process ID
 #ifdef _WIN32
 #define getpid GetCurrentProcessId
+#endif
+
+#ifndef _WIN32
+static bool WriteAll(int fd, const void* buf, size_t count) {
+    const char* ptr = static_cast<const char*>(buf);
+    while (count > 0) {
+        ssize_t bytes_written = write(fd, ptr, count);
+        if (bytes_written < 0) {
+            if (errno == EINTR) continue;
+            return false;
+        }
+        ptr += bytes_written;
+        count -= bytes_written;
+    }
+    return true;
+}
+
+static bool ReadAll(int fd, void* buf, size_t count) {
+    char* ptr = static_cast<char*>(buf);
+    while (count > 0) {
+        ssize_t bytes_read = read(fd, ptr, count);
+        if (bytes_read < 0) {
+            if (errno == EINTR) continue;
+            return false;
+        }
+        if (bytes_read == 0) return false;
+        ptr += bytes_read;
+        count -= bytes_read;
+    }
+    return true;
+}
 #endif
 
 class DiscordRpcClient {
@@ -146,10 +178,10 @@ private:
             return false;
         }
 #else
-        if (write(mSocket, header, sizeof(header)) != sizeof(header)) {
+        if (!WriteAll(mSocket, header, sizeof(header))) {
             return false;
         }
-        if (write(mSocket, json.data(), json.size()) != (ssize_t)json.size()) {
+        if (!WriteAll(mSocket, json.data(), json.size())) {
             return false;
         }
 #endif
@@ -164,11 +196,10 @@ private:
             }
         }
 #else
-        if (read(mSocket, respHeader, sizeof(respHeader)) == sizeof(respHeader)) {
+        if (ReadAll(mSocket, respHeader, sizeof(respHeader))) {
             if (respHeader[1] > 0) {
                 std::vector<char> buf(respHeader[1]);
-                ssize_t r = read(mSocket, buf.data(), respHeader[1]);
-                (void)r;
+                ReadAll(mSocket, buf.data(), respHeader[1]);
             }
         }
 #endif
@@ -235,6 +266,10 @@ private:
     }
 
 public:
+    ~DiscordRpcClient() {
+        Stop();
+    }
+
     void Start(const std::string& appId) {
         if (mRunning) return;
         mAppId = appId;
@@ -273,12 +308,14 @@ static DiscordRpcClient gDiscordClient;
 
 static std::string getWeaponEmoji(const std::string& weapon) {
     std::string lower = weapon;
-    for (char &c : lower) c = tolower(c);
+    for (char &c : lower) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
     if (lower.find("fist") != std::string::npos) return "👊";
     if (lower.find("saw") != std::string::npos || lower.find("chainsaw") != std::string::npos) return "🪚";
     if (lower.find("pistol") != std::string::npos) return "🔫";
-    if (lower.find("shotgun") != std::string::npos) return "🔫";
-    if (lower.find("chaingun") != std::string::npos || lower.find("minigun") != std::string::npos) return "🔫";
+    if (lower.find("shotgun") != std::string::npos) return "💥";
+    if (lower.find("chaingun") != std::string::npos || lower.find("minigun") != std::string::npos) return "🔥";
     if (lower.find("rocket") != std::string::npos || lower.find("missile") != std::string::npos) return "🚀";
     if (lower.find("plasma") != std::string::npos) return "⚡";
     if (lower.find("bfg") != std::string::npos) return "🟢";
@@ -290,6 +327,14 @@ void I_TickDiscordPresence() {
         gDiscordClient.Stop();
         return;
     }
+
+    static auto lastUpdateTime = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    bool forceUpdate = gDiscordClient.GetAppId().empty();
+    if (!forceUpdate && std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdateTime).count() < 1000) {
+        return;
+    }
+    lastUpdateTime = now;
 
     const char* appId = DEFAULT_DISCORD_APP_ID;
     const char* cvarAppId = discord_appid;

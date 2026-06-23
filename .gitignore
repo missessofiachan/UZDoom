@@ -42,3 +42,5 @@ wadsrc*/**/language.0
 /src/gl/unused
 /mapfiles_release/*.map
 .cache/
+
+.agent
