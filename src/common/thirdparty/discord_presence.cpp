@@ -15,7 +15,7 @@
 #else
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/select.h>
+#include <poll.h> // Fixed: Swapped select.h for poll.h to prevent FD_SET stack smashing
 #include <unistd.h>
 #include <fcntl.h>
 #endif
@@ -161,15 +161,12 @@ private:
                     strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
 
                     if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0 || errno == EINPROGRESS) {
-                        // Set timeout for pending connection
-                        fd_set writefds;
-                        FD_ZERO(&writefds);
-                        FD_SET(fd, &writefds);
-                        struct timeval tv;
-                        tv.tv_sec = 0;
-                        tv.tv_usec = SOCKET_TIMEOUT_MS * 1000;
+                        // Fixed: Using poll() instead of select()
+                        struct pollfd pfd;
+                        pfd.fd = fd;
+                        pfd.events = POLLOUT;
                         
-                        if (select(fd + 1, nullptr, &writefds, nullptr, &tv) > 0 && FD_ISSET(fd, &writefds)) {
+                        if (poll(&pfd, 1, SOCKET_TIMEOUT_MS) > 0) {
                             int err = 0;
                             socklen_t errlen = sizeof(err);
                             if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen) == 0 && err == 0) {
@@ -237,15 +234,12 @@ private:
                 }
             }
 #else
-            // Set read timeout on socket
-            fd_set readfds;
-            FD_ZERO(&readfds);
-            FD_SET(mSocket, &readfds);
-            struct timeval tv;
-            tv.tv_sec = 0;
-            tv.tv_usec = SOCKET_TIMEOUT_MS * 1000;
+            // Fixed: Using poll() instead of select() to prevent FD stack smashing
+            struct pollfd pfd;
+            pfd.fd = mSocket;
+            pfd.events = POLLIN;
             
-            if (select(mSocket + 1, &readfds, nullptr, nullptr, &tv) <= 0) {
+            if (poll(&pfd, 1, SOCKET_TIMEOUT_MS) <= 0) {
                 throw DiscordException("Read timeout");
             }
             
@@ -272,8 +266,13 @@ private:
         while (mRunning) {
             try {
                 if (mDisabledDueToErrors) {
-                    // Give it a chance to recover every 30 seconds
-                    std::this_thread::sleep_for(std::chrono::seconds(30));
+                    // Fixed: Replaced monolithic 30s block with interruptible chunked sleeps 
+                    // This prevents the game from hanging when quitting.
+                    for (int i = 0; i < 60 && mRunning; ++i) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    }
+                    if (!mRunning) break; // Break loop early if game is shutting down
+
                     if (mConsecutiveFailures > 0) {
                         mConsecutiveFailures--;
                     }
@@ -569,12 +568,17 @@ void I_TickDiscordPresence() {
             std::string difficulty = skillName ? skillName : "Unknown";
             details = "🕹️ " + mapName + ": " + levelName + " (" + difficulty + ")";
 
+            // Fixed: Strict bounds check added for consoleplayer
             std::string weaponName = "Fists";
-            if (players[consoleplayer].ReadyWeapon) {
-                weaponName = players[consoleplayer].ReadyWeapon->GetTag();
+            int health = 0;
+            
+            if (consoleplayer >= 0 && consoleplayer < MAXPLAYERS) {
+                health = std::max(0, players[consoleplayer].health);
+                if (players[consoleplayer].ReadyWeapon) {
+                    weaponName = players[consoleplayer].ReadyWeapon->GetTag();
+                }
             }
 
-            int health = std::max(0, players[consoleplayer].health);
             int kills = primaryLevel->killed_monsters;
             int totalKills = primaryLevel->total_monsters;
             int secrets = primaryLevel->found_secrets;
@@ -626,7 +630,6 @@ void I_TickDiscordPresence() {
         gDiscordClient.Update(details, state, largeImage, largeText);
     } catch (const std::exception& e) {
         // Catch any exceptions to prevent game crash
-        // ponytail: silently swallow - Discord is optional UI detail
     } catch (...) {
         // Catch absolutely everything to keep game stable
     }
